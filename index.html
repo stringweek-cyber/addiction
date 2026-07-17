@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조절노트 (Control Note)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome 아이콘 라이브러리 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Noto Sans KR -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 커스텀 스크롤바 디자인 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* image_3a936a.png 스타일을 구현하기 위한 세로 타원형 활성 캡슐 스타일 */
+        .active-pill-knob {
+            width: 16px !important;
+            height: 36px !important;
+            border-radius: 9999px !important;
+            border: 3px solid #ffffff !important;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+            transform: translateY(-6px) !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .active-pill-knob span {
+            display: none !important; /* 활성화 시 안의 숫자는 숨김 처리 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center">
+
+    <div class="w-full max-w-md bg-white min-h-screen flex flex-col shadow-xl relative pb-24 border-x border-slate-100">
+        
+        <!-- 헤더 영역 -->
+        <header class="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between z-30">
+            <div class="flex items-center space-x-2">
+                <div class="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md shadow-indigo-200">
+                    <i class="fa-solid fa-brain text-sm"></i>
+                </div>
+                <h1 class="text-xl font-black tracking-tight text-slate-900">조절노트</h1>
+            </div>
+            <div class="flex space-x-2">
+                <!-- image_3a9006.png 구조를 따르는 초기화 버튼 -->
+                <button onclick="confirmResetAll()" class="text-xs text-indigo-600 font-bold px-3 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center space-x-1" title="데이터 초기화">
+                    <i class="fa-solid fa-rotate-left mr-0.5"></i>
+                    <span>초기화</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 탭 네비게이션 메인바 (기록/목록 -> 기록으로 변경) -->
+        <div class="px-6 pt-4">
+            <div class="flex bg-slate-100 p-1 rounded-xl">
+                <button id="tab-btn-calendar" onclick="switchTab('calendar')" class="flex-1 py-3 text-sm font-bold rounded-lg text-slate-700 bg-white shadow-sm transition-all duration-200 flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>기록</span>
+                </button>
+                <button id="tab-btn-trend" onclick="switchTab('trend')" class="flex-1 py-3 text-sm font-bold rounded-lg text-slate-500 hover:text-slate-800 transition-all duration-200 flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>추이변화</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 메인 콘텐츠 영역 -->
+        <main class="flex-1 p-6 overflow-y-auto">
+
+            <!-- ================= CALENDAR / RECORD TAB ================= -->
+            <div id="tab-content-calendar" class="space-y-6">
+                
+                <!-- 날짜 선택 카드 (상자 안에 요일과 오늘을 동적으로 통합 표시) -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-wider">날짜 설정</label>
+                    <div class="relative bg-white border border-slate-200 rounded-xl px-4 py-3.5 flex justify-between items-center cursor-pointer hover:border-slate-300 transition-all">
+                        <!-- 실제 선택을 담당하는 보이지 않는 데이트 피커 -->
+                        <input type="date" id="record-date" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20">
+                        <!-- 유저가 보게 되는 동적인 박스 내 표시부 -->
+                        <span id="custom-date-box-text" class="text-base font-bold transition-colors z-10">
+                            <!-- JS를 통해 2026-07-17(금) 오늘 형태로 가공되어 표시됩니다 -->
+                        </span>
+                        <i class="fa-regular fa-calendar-days text-slate-400 text-lg z-10"></i>
+                    </div>
+                </div>
+
+                <!-- 1단계: 충동 강도 -->
+                <div class="space-y-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                    <div class="flex justify-between items-center">
+                        <label class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 text-sm flex items-center justify-center font-extrabold mr-2">1</span>
+                            충동 강도
+                        </label>
+                        <span id="label-urge" class="text-xs font-bold text-slate-400">선택 안 함</span>
+                    </div>
+                    
+                    <div class="relative pt-6 pb-2 px-2">
+                        <!-- 가로 선 베이스 -->
+                        <div class="absolute top-[34px] left-2 right-2 h-[3px] bg-slate-200 rounded-full"></div>
+                        <!-- 선택에 따라 채워지는 채색 선 -->
+                        <div id="track-urge" class="absolute top-[34px] left-2 h-[3px] bg-indigo-600 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                        
+                        <!-- 4개의 척도 노드 버튼 (글자 크게 조정) -->
+                        <div class="relative flex justify-between">
+                            <button type="button" onclick="setScore('urge', 0)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-urge-0" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">0</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap">없음</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('urge', 1)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-urge-1" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">1</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap">조금</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('urge', 2)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-urge-2" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">2</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-amber-600 mt-3.5 whitespace-nowrap">참음</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('urge', 3)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-urge-3" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">3</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-red-600 mt-3.5 whitespace-nowrap">임박/행동</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2단계: 행동 여부 -->
+                <div class="space-y-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                    <div class="flex justify-between items-center">
+                        <label class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-rose-100 text-rose-600 text-sm flex items-center justify-center font-extrabold mr-2">2</span>
+                            행동 여부
+                        </label>
+                        <span id="label-action" class="text-xs font-bold text-slate-400">선택 안 함</span>
+                    </div>
+                    
+                    <div class="relative pt-6 pb-2 px-2">
+                        <!-- 가로 선 베이스 -->
+                        <div class="absolute top-[34px] left-2 right-2 h-[3px] bg-slate-200 rounded-full"></div>
+                        <!-- 선택에 따라 채워지는 채색 선 -->
+                        <div id="track-action" class="absolute top-[34px] left-2 h-[3px] bg-rose-500 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                        
+                        <!-- 4개의 척도 노드 버튼 -->
+                        <div class="relative flex justify-between">
+                            <button type="button" onclick="setScore('action', 0)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-action-0" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">0</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap">없음</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('action', 1)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-action-1" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">1</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap">생각만</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('action', 2)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-action-2" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">2</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-amber-600 mt-3.5 whitespace-nowrap">시도/멈춤</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('action', 3)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-action-3" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">3</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-rose-600 mt-3.5 whitespace-nowrap">실제행동</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3단계: 감정 상태 -->
+                <div class="space-y-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                    <div class="flex justify-between items-center">
+                        <label class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-amber-100 text-amber-600 text-sm flex items-center justify-center font-extrabold mr-2">3</span>
+                            감정 상태
+                        </label>
+                        <span id="label-emotion" class="text-xs font-bold text-slate-400">선택 안 함</span>
+                    </div>
+                    
+                    <div class="relative pt-6 pb-2 px-2">
+                        <!-- 가로 선 베이스 -->
+                        <div class="absolute top-[34px] left-2 right-2 h-[3px] bg-slate-200 rounded-full"></div>
+                        <!-- 선택에 따라 채워지는 채색 선 -->
+                        <div id="track-emotion" class="absolute top-[34px] left-2 h-[3px] bg-amber-500 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                        
+                        <!-- 4개의 척도 노드 버튼 -->
+                        <div class="relative flex justify-between">
+                            <button type="button" onclick="setScore('emotion', 0)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-emotion-0" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">0</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap">안정</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('emotion', 1)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-emotion-1" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">1</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-orange-400 mt-3.5 whitespace-nowrap">약간짜증</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('emotion', 2)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-emotion-2" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">2</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-amber-600 mt-3.5 whitespace-nowrap">불안큼</span>
+                            </button>
+                            
+                            <button type="button" onclick="setScore('emotion', 3)" class="relative z-10 flex flex-col items-center group focus:outline-none w-14">
+                                <div id="node-emotion-3" class="w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-250 flex items-center justify-center group-hover:scale-110">
+                                    <span class="text-[10px] font-bold text-slate-400">3</span>
+                                </div>
+                                <span class="text-sm md:text-base font-bold text-red-600 mt-3.5 whitespace-nowrap">폭발/극도</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4단계: 부작용 (복수선택) -->
+                <div class="space-y-3">
+                    <label class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                        <span class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 text-sm flex items-center justify-center font-extrabold mr-2">4</span>
+                        부작용 <span class="text-xs text-slate-400 font-normal ml-1.5">(중복 선택 가능)</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2.5" id="group-side-effects">
+                        <button onclick="toggleSideEffect('메스꺼움', this)" class="side-effect-btn py-3.5 px-4 rounded-xl border border-slate-200 text-center text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center space-x-2">
+                            <span>메스꺼움</span>
+                        </button>
+                        <button onclick="toggleSideEffect('졸림', this)" class="side-effect-btn py-3.5 px-4 rounded-xl border border-slate-200 text-center text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center space-x-2">
+                            <span>졸림</span>
+                        </button>
+                        <button onclick="toggleSideEffect('식욕증가', this)" class="side-effect-btn py-3.5 px-4 rounded-xl border border-slate-200 text-center text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center space-x-2">
+                            <span>식욕증가</span>
+                        </button>
+                        <button onclick="toggleSideEffect('식욕감소', this)" class="side-effect-btn py-3.5 px-4 rounded-xl border border-slate-200 text-center text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center space-x-2">
+                            <span>식욕감소</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5단계: 메모 -->
+                <div class="space-y-3">
+                    <label class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                        <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-600 text-sm flex items-center justify-center font-extrabold mr-2">5</span>
+                        오늘의 메모
+                    </label>
+                    <textarea id="memo-input" rows="3" placeholder="충동이 발생한 구체적인 상황, 대처 방법, 감정 변화 등을 자유롭게 기록하세요." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:outline-none transition-all font-semibold"></textarea>
+                </div>
+
+                <!-- 저장 버튼 (텍스트 변경) -->
+                <button onclick="saveRecord()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100 hover:shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-base">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>저장하기</span>
+                </button>
+
+                <!-- 최근 기록 목록 -->
+                <div class="pt-6 border-t border-slate-100 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base md:text-lg font-black text-slate-800 flex items-center">
+                            <i class="fa-solid fa-list-check text-indigo-500 mr-2"></i>최근 저장된 기록 목록
+                        </h3>
+                        <span id="history-count" class="text-xs font-black text-slate-400 bg-slate-100 px-2.5 py-1.5 rounded-full">0건</span>
+                    </div>
+
+                    <div id="history-container" class="space-y-3">
+                        <!-- JS에서 동적으로 채워짐 -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================= TREND TAB ================= -->
+            <div id="tab-content-trend" class="space-y-6 hidden">
+                
+                <!-- 최근 통계 카드 요약 -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-100 text-center">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">평균 충동</p>
+                        <p id="stat-avg-urge" class="text-xl font-black text-indigo-700">0.0</p>
+                    </div>
+                    <div class="bg-rose-50/50 p-3.5 rounded-xl border border-rose-100 text-center">
+                        <p class="text-[10px] font-bold text-rose-400 uppercase tracking-wider mb-1">최대 행동</p>
+                        <p id="stat-max-action" class="text-xl font-black text-rose-700">0</p>
+                    </div>
+                    <div class="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100 text-center">
+                        <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">최다 부작용</p>
+                        <p id="stat-common-side" class="text-xs font-black text-emerald-700 truncate mt-1">없음</p>
+                    </div>
+                </div>
+
+                <!-- 실시간 라인 차트 영역 -->
+                <div class="bg-white border border-slate-150 p-4 rounded-2xl shadow-sm space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-sm font-bold text-slate-800">충동·행동·감정 추이 시각화</h4>
+                        <span class="text-[10px] font-semibold text-slate-400">최근 7일 지표 (0~3점)</span>
+                    </div>
+                    <div class="relative w-full h-64">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 조절 성취 격려 안내판 -->
+                <div class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-5 rounded-2xl shadow-md space-y-2">
+                    <h4 class="font-bold text-base flex items-center">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>충동 조절 가이드라인
+                    </h4>
+                    <p class="text-xs text-indigo-100 leading-relaxed font-medium">
+                        충동 지수가 높음에도 불구하고 행동 지수가 현저히 낮은 날은 스스로의 엄청난 의지로 충동 통제를 성공해 낸 영광의 기록입니다. 꺾은선 차트를 보며 흔들리는 마음을 다잡고 안전 구간을 유지해 나가세요.
+                    </p>
+                </div>
+
+            </div>
+
+        </main>
+
+        <!-- 푸터 브랜딩 배너 -->
+        <footer class="absolute bottom-4 left-0 right-0 text-center">
+            <span class="text-[10px] text-slate-300 font-medium uppercase tracking-widest">Control Note. Safe & Confidential.</span>
+        </footer>
+
+        <!-- Custom 토스트 메시지 팝업 -->
+        <div id="custom-toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-xl flex items-center space-x-2 opacity-0 pointer-events-none transition-all duration-300 z-50">
+            <span id="toast-icon"><i class="fa-solid fa-check text-emerald-400"></i></span>
+            <span id="toast-message">메시지 내용</span>
+        </div>
+
+        <!-- Custom 데이터 초기화 확인 모달 -->
+        <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 z-50 hidden">
+            <div class="bg-white w-full max-w-xs rounded-2xl p-5 space-y-4 shadow-2xl scale-95 transition-all">
+                <div class="text-center space-y-2">
+                    <div class="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto text-lg">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </div>
+                    <h5 class="font-bold text-slate-800 text-base">데이터 전체 삭제</h5>
+                    <p class="text-xs text-slate-500 leading-relaxed">기록된 모든 데이터를 삭제하고 처음 상태로 되돌리시겠습니까? 이 작업은 복구할 수 없습니다.</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="modal-cancel-btn" class="flex-1 py-2.5 text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">취소</button>
+                    <button id="modal-confirm-btn" class="flex-1 py-2.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors">전체삭제</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 상태값 저장 변수들
+        let activeTab = 'calendar';
+        let records = {};
+        
+        // 현재 작성중인 폼의 상태값
+        let currentRecord = {
+            urge: null,
+            action: null,
+            emotion: null,
+            sideEffects: []
+        };
+
+        let chartInstance = null;
+        let pendingReset = false; // 초기화 여부 플래그
+
+        // 최초 로드 시 초기 데이터 셋팅
+        window.onload = function() {
+            // 오늘 날짜 기본 지정 (2026-07-17 기준)
+            const defaultDate = '2026-07-17';
+            document.getElementById('record-date').value = defaultDate;
+
+            // 로컬스토리지 복구 및 더미데이터 세팅
+            if (!localStorage.getItem('control_notes_data')) {
+                initializeDemoData();
+            } else {
+                loadRecords();
+            }
+
+            renderHistory();
+            updateDateDisplay(defaultDate);
+            
+            // 날짜 변경 이벤트 연동
+            document.getElementById('record-date').addEventListener('change', function() {
+                updateDateDisplay(this.value);
+                loadExistingRecord(this.value);
+            });
+
+            // 초기 날짜 로드
+            loadExistingRecord(defaultDate);
+        };
+
+        // 가상 샘플 데이터 채워주기 (오늘 데이터 초기 상태 빈값으로 조정)
+        function initializeDemoData() {
+            const demoData = {};
+            const today = new Date('2026-07-17');
+            
+            // 최근 5일치 샘플 세팅
+            for (let i = 4; i >= 0; i--) {
+                const targetDate = new Date(today);
+                targetDate.setDate(today.getDate() - i);
+                const dateStr = targetDate.toISOString().split('T')[0];
+                
+                let urge = 1, action = 1, emotion = 1, memo = "", sideEffects = [];
+                if (i === 4) { urge = 1; action = 0; emotion = 0; memo = "관찰 시작일. 아직은 충동이 크지 않고 차분히 생각만 스쳐 지나갔습니다."; sideEffects = ["졸림"]; }
+                if (i === 3) { urge = 2; action = 1; emotion = 1; memo = "퇴근 무렵 약간의 충동을 참아냄. 음악 감상으로 마음을 진정시켰습니다."; sideEffects = ["졸림", "식욕증가"]; }
+                if (i === 2) { urge = 3; action = 2; emotion = 2; memo = "위험한 순간이었으나 자전거 라이딩을 하며 극복. 엄청난 의지력이 필요했음."; sideEffects = ["메스꺼움"]; }
+                if (i === 1) { urge = 1; action = 0; emotion = 0; memo = "안정을 회복했습니다. 독서에만 집중하며 주말을 보냈습니다."; sideEffects = []; }
+                if (i === 0) { urge = 0; action = 0; emotion = 0; memo = ""; sideEffects = []; } // 오늘(i=0) 데이터는 부작용과 메모가 없는 빈 상태가 기본
+
+                demoData[dateStr] = {
+                    urge: urge,
+                    action: action,
+                    emotion: emotion,
+                    sideEffects: sideEffects,
+                    memo: memo
+                };
+            }
+            
+            localStorage.setItem('control_notes_data', JSON.stringify(demoData));
+            loadRecords();
+        }
+
+        // 초기화 버튼 클릭 확인 모달 호출
+        function confirmResetAll() {
+            pendingReset = true;
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+        }
+
+        // 모달 조작 이벤트 매핑
+        document.getElementById('modal-cancel-btn').addEventListener('click', () => {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            pendingReset = false;
+        });
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if (pendingReset) {
+                // 완전히 빈 상태로 데이터 청소
+                records = {};
+                localStorage.setItem('control_notes_data', JSON.stringify(records));
+                
+                document.getElementById('confirm-modal').classList.add('hidden');
+                pendingReset = false;
+                
+                showToast("모든 데이터가 완전히 초기화되었습니다.", "info");
+                
+                // 화면 리셋
+                resetForm();
+                renderHistory();
+                if (activeTab === 'trend') {
+                    renderTrendChart();
+                }
+            }
+        });
+
+        // 로컬스토리지 로드
+        function loadRecords() {
+            try {
+                const data = localStorage.getItem('control_notes_data');
+                records = data ? JSON.parse(data) : {};
+            } catch (e) {
+                records = {};
+            }
+        }
+
+        // 지능형 요일 및 오늘 표기 업데이트 (상자 내부에 표시되도록 개편)
+        function updateDateDisplay(dateValue) {
+            if (!dateValue) return;
+            const dateObj = new Date(dateValue);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            
+            // 요일 구하기
+            const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+            const dayOfWeek = weekDays[dateObj.getDay()];
+            
+            // 고정 오늘 기준 (2026-07-17)
+            const targetToday = '2026-07-17';
+            
+            const displayEl = document.getElementById('custom-date-box-text');
+            
+            if (dateValue === targetToday) {
+                // 오늘인 경우: 날짜와 요일은 깔끔한 검정색, "오늘" 태그만 파란색 표시
+                displayEl.innerHTML = `${year}-${month}-${day}(${dayOfWeek}) <span class="ml-1 text-sm font-extrabold uppercase bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">오늘</span>`;
+                displayEl.className = "text-base font-black text-slate-900 transition-colors z-10";
+            } else {
+                // 오늘이 아닌 경우: 일반 slate 색상으로 단정한 표기
+                displayEl.innerHTML = `${year}-${month}-${day}(${dayOfWeek})`;
+                displayEl.className = "text-base font-bold text-slate-800 transition-colors z-10";
+            }
+        }
+
+        // 각 단계 항목 점수 세팅 (선형 슬라이더용 - image_3a936a.png 양식 적용)
+        function setScore(type, score) {
+            currentRecord[type] = score;
+
+            // 상단 활성 요약 설명 업데이트
+            const scoreLabels = {
+                urge: ['0점 (없음)', '1점 (조금 느낌)', '2점 (꽤 강함 - 참음)', '3점 (매우 강함 - 임박/행동)'],
+                action: ['0점 (없음)', '1점 (생각만 함)', '2점 (시도했지만 멈춤)', '3점 (실제 행동)'],
+                emotion: ['0점 (안정)', '1점 (약간 불안/짜증)', '2점 (불안/짜증 큼)', '3점 (매우 불안/폭발)']
+            };
+            const labelEl = document.getElementById(`label-${type}`);
+            labelEl.textContent = scoreLabels[type][score];
+            labelEl.className = "text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-full";
+
+            // 테마별 컬러
+            const colors = {
+                urge: { activeBg: 'bg-indigo-600', activeBorder: 'border-indigo-600', text: 'text-indigo-600', track: 'bg-indigo-600' },
+                action: { activeBg: 'bg-rose-500', activeBorder: 'border-rose-500', text: 'text-rose-600', track: 'bg-rose-500' },
+                emotion: { activeBg: 'bg-amber-500', activeBorder: 'border-amber-500', text: 'text-amber-600', track: 'bg-amber-500' }
+            };
+
+            const config = colors[type];
+
+            // 1. 활성 라인 업데이트
+            const trackPercent = (score / 3) * 100;
+            const track = document.getElementById(`track-${type}`);
+            track.style.width = `calc(${trackPercent}% - 8px)`;
+            track.className = `absolute top-[34px] left-3.5 h-[3px] ${config.track} rounded-full transition-all duration-300`;
+
+            // 2. 4개 노드 스타일 변경 (세로 알약 캡슐 적용)
+            for (let i = 0; i <= 3; i++) {
+                const node = document.getElementById(`node-${type}-${i}`);
+                const text = node.querySelector('span');
+                const button = node.closest('button');
+                const labelText = button.querySelector('span:last-child');
+
+                if (i === score) {
+                    // 선택된 노드: 세로 캡슐화 (image_3a936a.png)
+                    node.className = `active-pill-knob flex items-center justify-center z-20 ${config.activeBg}`;
+                    if (text) text.className = "hidden";
+                    if (labelText) {
+                        labelText.className = "text-sm md:text-base font-black text-slate-800 mt-5 whitespace-nowrap transition-all scale-105";
+                    }
+                } else {
+                    // 비선택 원형 노드 복귀
+                    node.className = "w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-200 flex items-center justify-center z-10";
+                    if (text) {
+                        text.className = "text-[10px] font-bold text-slate-400";
+                        text.style.display = "inline";
+                    }
+                    if (labelText) {
+                        if (i === 2) {
+                            labelText.className = "text-sm md:text-base font-bold text-amber-600 mt-3.5 whitespace-nowrap";
+                        } else if (i === 3) {
+                            const customColor = type === 'urge' ? 'text-red-600' : (type === 'action' ? 'text-rose-600' : 'text-red-600');
+                            labelText.className = `text-sm md:text-base font-bold ${customColor} mt-3.5 whitespace-nowrap`;
+                        } else {
+                            labelText.className = "text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap";
+                        }
+                    }
+                }
+            }
+        }
+
+        // 부작용 체크박스 관리
+        function toggleSideEffect(effect, element) {
+            const index = currentRecord.sideEffects.indexOf(effect);
+            if (index > -1) {
+                currentRecord.sideEffects.splice(index, 1);
+                element.classList.remove('bg-emerald-500', 'text-white', 'border-emerald-500');
+                element.classList.add('border-slate-200', 'text-slate-600', 'hover:bg-slate-50');
+            } else {
+                currentRecord.sideEffects.push(effect);
+                element.classList.remove('border-slate-200', 'text-slate-600', 'hover:bg-slate-50');
+                element.classList.add('bg-emerald-500', 'text-white', 'border-emerald-500');
+            }
+        }
+
+        // 날짜 변경 시 기록 로드
+        function loadExistingRecord(dateStr) {
+            resetFormOnly();
+            
+            if (records[dateStr]) {
+                const record = records[dateStr];
+                
+                if (record.urge !== null && record.urge !== undefined) {
+                    setScore('urge', record.urge);
+                }
+                if (record.action !== null && record.action !== undefined) {
+                    setScore('action', record.action);
+                }
+                if (record.emotion !== null && record.emotion !== undefined) {
+                    setScore('emotion', record.emotion);
+                }
+
+                if (record.sideEffects && Array.isArray(record.sideEffects)) {
+                    record.sideEffects.forEach(effect => {
+                        const effectBtns = document.querySelectorAll('#group-side-effects .side-effect-btn');
+                        effectBtns.forEach(btn => {
+                            if (btn.textContent.trim() === effect) {
+                                toggleSideEffect(effect, btn);
+                            }
+                        });
+                    });
+                }
+
+                if (record.memo) {
+                    document.getElementById('memo-input').value = record.memo;
+                }
+                
+                showToast(`${dateStr}의 기록을 불러왔습니다.`, "info");
+            }
+        }
+
+        // 폼 초기화
+        function resetForm() {
+            resetFormOnly();
+            const today = '2026-07-17';
+            document.getElementById('record-date').value = today;
+            updateDateDisplay(today);
+            loadExistingRecord(today);
+        }
+
+        // 폼 노드 그래픽 리셋
+        function resetFormOnly() {
+            currentRecord = { urge: null, action: null, emotion: null, sideEffects: [] };
+            
+            ['urge', 'action', 'emotion'].forEach(type => {
+                const track = document.getElementById(`track-${type}`);
+                if (track) {
+                    track.style.width = "0%";
+                    track.className = "absolute top-[34px] left-3.5 h-[3px] bg-slate-200 rounded-full transition-all duration-300";
+                }
+                
+                const label = document.getElementById(`label-${type}`);
+                if (label) {
+                    label.textContent = "선택 안 함";
+                    label.className = "text-xs font-bold text-slate-400";
+                }
+                
+                for (let i = 0; i <= 3; i++) {
+                    const node = document.getElementById(`node-${type}-${i}`);
+                    if (node) {
+                        node.className = "w-6 h-6 rounded-full border-2 border-slate-300 bg-white transition-all duration-200 flex items-center justify-center z-10";
+                        const text = node.querySelector('span');
+                        if (text) {
+                            text.className = "text-[10px] font-bold text-slate-400";
+                            text.style.display = "inline";
+                        }
+                    }
+                    const btn = document.getElementById(`node-${type}-${i}`)?.closest('button');
+                    const labelText = btn?.querySelector('span:last-child');
+                    if (labelText) {
+                        if (i === 2) labelText.className = "text-sm md:text-base font-bold text-amber-600 mt-3.5 whitespace-nowrap transition-all";
+                        else if (i === 3) {
+                            const specColor = type === 'urge' ? 'text-red-600' : (type === 'action' ? 'text-rose-600' : 'text-red-600');
+                            labelText.className = `text-sm md:text-base font-bold ${specColor} mt-3.5 whitespace-nowrap transition-all`;
+                        } else {
+                            labelText.className = "text-sm md:text-base font-bold text-slate-500 mt-3.5 whitespace-nowrap transition-all";
+                        }
+                    }
+                }
+            });
+
+            document.querySelectorAll('.side-effect-btn').forEach(btn => {
+                btn.classList.remove('bg-emerald-500', 'text-white', 'border-emerald-500');
+                btn.classList.add('border-slate-200', 'text-slate-600', 'hover:bg-slate-50');
+            });
+
+            document.getElementById('memo-input').value = "";
+        }
+
+        // 기록 저장
+        function saveRecord() {
+            const dateStr = document.getElementById('record-date').value;
+            if (!dateStr) {
+                showToast("날짜를 설정해주세요.", "error");
+                return;
+            }
+
+            if (currentRecord.urge === null) {
+                showToast("1번 [충동 강도]를 선택해 주세요.", "error");
+                return;
+            }
+            if (currentRecord.action === null) {
+                showToast("2번 [행동 여부]를 선택해 주세요.", "error");
+                return;
+            }
+            if (currentRecord.emotion === null) {
+                showToast("3번 [감정 상태]를 선택해 주세요.", "error");
+                return;
+            }
+
+            currentRecord.memo = document.getElementById('memo-input').value.trim();
+
+            records[dateStr] = {
+                urge: currentRecord.urge,
+                action: currentRecord.action,
+                emotion: currentRecord.emotion,
+                sideEffects: [...currentRecord.sideEffects],
+                memo: currentRecord.memo
+            };
+
+            localStorage.setItem('control_notes_data', JSON.stringify(records));
+            showToast(`${dateStr}의 조절노트가 저장되었습니다.`, "success");
+            
+            renderHistory();
+            
+            setTimeout(() => {
+                loadExistingRecord(dateStr);
+            }, 300);
+        }
+
+        // 개별 내역 목록 삭제 기능
+        function deleteHistoryItem(dateStr) {
+            if (confirm(`${dateStr}의 데이터를 삭제하시겠습니까?`)) {
+                delete records[dateStr];
+                localStorage.setItem('control_notes_data', JSON.stringify(records));
+                showToast(`${dateStr} 기록이 삭제되었습니다.`, "success");
+                
+                const currentDate = document.getElementById('record-date').value;
+                if (dateStr === currentDate) {
+                    resetFormOnly();
+                }
+
+                renderHistory();
+                if (activeTab === 'trend') {
+                    renderTrendChart();
+                }
+            }
+        }
+
+        // 목록 렌더링
+        function renderHistory() {
+            const container = document.getElementById('history-container');
+            const countLabel = document.getElementById('history-count');
+            
+            loadRecords();
+
+            const sortedDates = Object.keys(records).sort((a, b) => new Date(b) - new Date(a));
+            countLabel.textContent = `${sortedDates.length}건`;
+
+            if (sortedDates.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 px-4 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                        <i class="fa-regular fa-folder-open text-3xl text-slate-300 mb-2 block"></i>
+                        <p class="text-xs font-bold text-slate-400">저장된 기록이 없습니다.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">상단의 슬라이더를 통해 오늘을 관찰해 보세요.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = sortedDates.map(date => {
+                const item = records[date];
+                
+                const urgeColors = ['bg-slate-100 text-slate-700', 'bg-indigo-50 text-indigo-700 border border-indigo-100', 'bg-amber-50 text-amber-800 border border-amber-200 font-bold', 'bg-rose-50 text-rose-700 border border-rose-100 font-black'];
+                const urgeTexts = ['없음', '조금', '참음', '임박/행동'];
+
+                const actionColors = ['bg-slate-100 text-slate-700', 'bg-slate-50 text-slate-600', 'bg-amber-50 text-amber-800 border border-amber-100 font-bold', 'bg-rose-50 text-rose-700 border border-rose-150 font-black'];
+                const actionTexts = ['없음', '생각만', '시도/멈춤', '실제행동'];
+
+                const emotionColors = ['bg-slate-100 text-slate-700', 'bg-slate-50 text-slate-600', 'bg-amber-50 text-amber-700 border border-amber-100 font-bold', 'bg-rose-50 text-rose-700 border border-rose-150 font-black'];
+                const emotionTexts = ['안정', '약간불안', '불안큼', '폭발/극도'];
+
+                const sideEffectsHtml = item.sideEffects && item.sideEffects.length > 0 
+                    ? item.sideEffects.map(ef => `<span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100"><i class="fa-solid fa-circle-exclamation mr-1 text-[8px]"></i>${ef}</span>`).join('')
+                    : '';
+
+                return `
+                    <div class="bg-white border border-slate-150 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative group">
+                        
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-xs font-black text-slate-900 bg-slate-100 px-2.5 py-1.5 rounded-md flex items-center">
+                                <i class="fa-solid fa-calendar text-[10px] text-slate-500 mr-1.5"></i>${date}
+                            </span>
+                            <button onclick="deleteHistoryItem('${date}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition-all text-xs" title="삭제">
+                                <i class="fa-regular fa-trash-can text-sm"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+                            <div class="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 mb-1">충동</p>
+                                <span class="text-[10px] px-1.5 py-1 rounded ${urgeColors[item.urge]}">${item.urge} (${urgeTexts[item.urge]})</span>
+                            </div>
+                            <div class="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 mb-1">행동</p>
+                                <span class="text-[10px] px-1.5 py-1 rounded ${actionColors[item.action]}">${item.action} (${actionTexts[item.action]})</span>
+                            </div>
+                            <div class="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 mb-1">감정</p>
+                                <span class="text-[10px] px-1.5 py-1 rounded ${emotionColors[item.emotion]}">${item.emotion} (${emotionTexts[item.emotion]})</span>
+                            </div>
+                        </div>
+
+                        ${sideEffectsHtml ? `<div class="flex flex-wrap gap-1 mb-2.5">${sideEffectsHtml}</div>` : ''}
+                        ${item.memo ? `<div class="bg-slate-50 p-2.5 rounded-lg border-l-2 border-indigo-400 text-xs text-slate-600 italic leading-relaxed">"${item.memo}"</div>` : ''}
+
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 토스트 팝업 알림
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('custom-toast');
+            const icon = document.getElementById('toast-icon');
+            const msgEl = document.getElementById('toast-message');
+
+            msgEl.textContent = message;
+
+            if (type === "success") {
+                icon.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>`;
+            } else if (type === "error") {
+                icon.innerHTML = `<i class="fa-solid fa-circle-exclamation text-rose-400 text-sm"></i>`;
+            } else {
+                icon.innerHTML = `<i class="fa-solid fa-circle-info text-blue-400 text-sm"></i>`;
+            }
+
+            toast.classList.remove('opacity-0', 'pointer-events-none', 'bottom-24');
+            toast.classList.add('opacity-100', 'bottom-28');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'bottom-28');
+                toast.classList.add('opacity-0', 'pointer-events-none', 'bottom-24');
+            }, 2500);
+        }
+
+        // 탭 토글 시스템
+        function switchTab(target) {
+            activeTab = target;
+            
+            const btnCalendar = document.getElementById('tab-btn-calendar');
+            const btnTrend = document.getElementById('tab-btn-trend');
+            const contentCalendar = document.getElementById('tab-content-calendar');
+            const contentTrend = document.getElementById('tab-content-trend');
+
+            if (target === 'calendar') {
+                btnCalendar.className = "flex-1 py-3 text-sm font-bold rounded-lg text-slate-700 bg-white shadow-sm transition-all duration-200 flex items-center justify-center space-x-2";
+                btnTrend.className = "flex-1 py-3 text-sm font-bold rounded-lg text-slate-500 hover:text-slate-800 transition-all duration-200 flex items-center justify-center space-x-2";
+                contentCalendar.classList.remove('hidden');
+                contentTrend.classList.add('hidden');
+                
+                renderHistory();
+            } else {
+                btnTrend.className = "flex-1 py-3 text-sm font-bold rounded-lg text-slate-700 bg-white shadow-sm transition-all duration-200 flex items-center justify-center space-x-2";
+                btnCalendar.className = "flex-1 py-3 text-sm font-bold rounded-lg text-slate-500 hover:text-slate-800 transition-all duration-200 flex items-center justify-center space-x-2";
+                contentCalendar.classList.add('hidden');
+                contentTrend.classList.remove('hidden');
+
+                calculateStats();
+                renderTrendChart();
+            }
+        }
+
+        // 통계 연산
+        function calculateStats() {
+            loadRecords();
+            const dates = Object.keys(records).sort((a,b) => new Date(a) - new Date(b));
+
+            if (dates.length === 0) {
+                document.getElementById('stat-avg-urge').textContent = "0.0";
+                document.getElementById('stat-max-action').textContent = "0";
+                document.getElementById('stat-common-side').textContent = "기록없음";
+                return;
+            }
+
+            const recentDates = dates.slice(-7);
+            
+            let totalUrge = 0;
+            recentDates.forEach(d => totalUrge += records[d].urge);
+            document.getElementById('stat-avg-urge').textContent = (totalUrge / recentDates.length).toFixed(1);
+
+            let maxAction = 0;
+            recentDates.forEach(d => {
+                if (records[d].action > maxAction) maxAction = records[d].action;
+            });
+            document.getElementById('stat-max-action').textContent = maxAction;
+
+            const effectCounts = {};
+            dates.forEach(d => {
+                if (records[d].sideEffects) {
+                    records[d].sideEffects.forEach(ef => {
+                        effectCounts[ef] = (effectCounts[ef] || 0) + 1;
+                    });
+                }
+            });
+
+            let commonEffect = "없음";
+            let maxCount = 0;
+            for (const [effect, cnt] of Object.entries(effectCounts)) {
+                if (cnt > maxCount) {
+                    maxCount = cnt;
+                    commonEffect = effect;
+                }
+            }
+            document.getElementById('stat-common-side').textContent = commonEffect + (maxCount > 0 ? ` (${maxCount}회)` : '');
+        }
+
+        // 트렌드 차트 렌더링
+        function renderTrendChart() {
+            loadRecords();
+            const dates = Object.keys(records).sort((a,b) => new Date(a) - new Date(b));
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+
+            const last7Dates = dates.slice(-7);
+
+            if (last7Dates.length === 0) {
+                const canvasCtx = ctx.getContext('2d');
+                canvasCtx.clearRect(0, 0, ctx.width, ctx.height);
+                canvasCtx.font = "13px 'Noto Sans KR'";
+                canvasCtx.fillStyle = "#94a3b8";
+                canvasCtx.textAlign = "center";
+                canvasCtx.fillText("차트를 표시할 데이터가 부족합니다.", ctx.width / 2, ctx.height / 2);
+                return;
+            }
+
+            const labelDates = last7Dates.map(d => d.split('-')[1] + '/' + d.split('-')[2]);
+            const urgeScores = last7Dates.map(d => records[d].urge);
+            const actionScores = last7Dates.map(d => records[d].action);
+            const emotionScores = last7Dates.map(d => records[d].emotion);
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labelDates,
+                    datasets: [
+                        {
+                            label: '충동 강도',
+                            data: urgeScores,
+                            borderColor: '#4f46e5',
+                            backgroundColor: '#4f46e5',
+                            pointRadius: 4,
+                            tension: 0.15,
+                            borderWidth: 2.5
+                        },
+                        {
+                            label: '행동 여부',
+                            data: actionScores,
+                            borderColor: '#f43f5e',
+                            backgroundColor: '#f43f5e',
+                            pointRadius: 4,
+                            tension: 0.15,
+                            borderWidth: 2.5
+                        },
+                        {
+                            label: '감정 상태',
+                            data: emotionScores,
+                            borderColor: '#d97706',
+                            backgroundColor: '#d97706',
+                            pointRadius: 4,
+                            tension: 0.15,
+                            borderWidth: 2.5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 3,
+                            ticks: {
+                                stepSize: 1,
+                                callback: value => ['0 (없음)', '1 (약함)', '2 (강함)', '3 (치명)'][value] || value,
+                                font: { size: 10, family: 'Noto Sans KR' }
+                            },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 10, family: 'Noto Sans KR' } }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: { size: 11, family: 'Noto Sans KR', weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
