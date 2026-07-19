@@ -760,9 +760,12 @@
                     const mm = String(d.getMonth() + 1).padStart(2, '0');
                     const dd = String(d.getDate()).padStart(2, '0');
 
-                    chartLabels.push(`${mm}/${dd}(${dayNames[d.getDay()]})`);
-
                     const item = records[dateStr];
+                    const sideEffectsLine = item && item.sideEffects && item.sideEffects.length > 0 ? item.sideEffects.join(', ') : '';
+                    const memoLine = item && item.memo && item.memo.trim() ? item.memo : '';
+
+                    chartLabels.push([`${mm}/${dd}(${dayNames[d.getDay()]})`, sideEffectsLine, memoLine]);
+
                     urgeScores.push(item ? item.urge : null);
                     actionScores.push(item ? item.action : null);
                     emotionScores.push(item ? item.emotion : null);
