@@ -61,11 +61,11 @@
                 <!-- 투명한 실제 인풋 위에 스타일 레이어를 덮는 스마트 구조 -->
                 <div class="relative bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
                     <div class="flex items-center gap-2.5">
-                        <span id="date-text-display" class="text-base font-black text-slate-900">2026-07-17(금)</span>
-                        <span id="today-badge" class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[11px] font-black border border-blue-100/50">오늘</span>
+                        <span id="date-text-display" class="text-base font-black text-slate-900"></span>
+                        <span id="today-badge" class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[11px] font-black border border-blue-100/50 hidden">오늘</span>
                     </div>
                     <svg class="text-slate-400" style="width:1.15em;height:1.15em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
-                    <input type="date" id="record-date" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" value="2026-07-17" onclick="if(this.showPicker){this.showPicker();}">
+                    <input type="date" id="record-date" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onclick="if(this.showPicker){this.showPicker();}">
                 </div>
             </div>
 
@@ -239,17 +239,8 @@
         <!-- STREAMING_CHUNK: 2. 추이변화 탭 콘텐츠 그리기 -->
         <!-- 2. 추이변화 탭 콘텐츠 -->
         <div id="content-trend" class="space-y-4 hidden">
-            <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm/50">
-                <div class="mb-4">
-                    <h3 class="text-base font-black text-slate-950 flex items-center gap-2">
-                        <svg class="inline-block align-[-0.125em] text-indigo-500" style="width:1em;height:1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 19V5"/><polyline points="4 15 9 10 13 13 20 6"/></svg>날짜별 변화
-                    </h3>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">상단의 기록 데이터를 기반으로 변동성이 자동 시각화됩니다.</p>
-                </div>
-                <!-- 차트 영역 (플레이스홀더를 제거하여 언제나 눈금과 날짜 축이 보이도록 유도) -->
-                <div class="relative min-h-[260px] flex items-center justify-center">
-                    <canvas id="trendChart" class="w-full h-full max-h-[300px]"></canvas>
-                </div>
+            <div id="trend-charts-container" class="space-y-4">
+                <!-- JS에서 주(월~일) 단위 차트를 렌더링 -->
             </div>
         </div>
 
@@ -292,18 +283,44 @@
             memo: ''
         };
 
-        let chartInstance = null;
         let targetDeleteDate = null; // 삭제 대기 날짜
+
+        // 실제 기기의 오늘 날짜를 "YYYY-MM-DD" 형식으로 반환
+        function getTodayStr() {
+            const d = new Date();
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Date 객체를 "YYYY-MM-DD" 문자열로 변환
+        function formatDateStr(d) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // 해당 날짜가 속한 주의 월요일 Date 객체 반환
+        function getMonday(d) {
+            const date = new Date(d);
+            const day = date.getDay(); // 0=일,1=월,...6=토
+            const diff = (day === 0 ? -6 : 1 - day);
+            date.setDate(date.getDate() + diff);
+            date.setHours(0, 0, 0, 0);
+            return date;
+        }
 
         // 최초 로드 시 초기 데이터 셋팅
         window.onload = function() {
-            // 오늘 날짜 기본 지정 (2026-07-17 기준)
-            const defaultDate = '2026-07-17';
+            // 실제 기기의 오늘 날짜를 기본값으로 지정
+            const defaultDate = getTodayStr();
             document.getElementById('record-date').value = defaultDate;
 
             // 로컬스토리지에서 복구 (가상 샘플 데이터 없이 완벽하게 깨끗한 빈 상태로 시작)
-            if (!localStorage.getItem('control_notes_data')) {
-                localStorage.setItem('control_notes_data', JSON.stringify({}));
+            if (!localStorage.getItem('control_notes_data_v2')) {
+                localStorage.setItem('control_notes_data_v2', JSON.stringify({}));
             }
             loadRecords();
 
@@ -323,7 +340,7 @@
         // 로컬스토리지 데이터 로드
         function loadRecords() {
             try {
-                const data = localStorage.getItem('control_notes_data');
+                const data = localStorage.getItem('control_notes_data_v2');
                 records = data ? JSON.parse(data) : {};
             } catch(e) {
                 records = {};
@@ -340,9 +357,9 @@
             const formattedText = `${dateStr}(${dayOfWeek})`;
             document.getElementById('date-text-display').textContent = formattedText;
 
-            // 2026-07-17이 오늘 기준이므로, 해당 날짜일 때 파란색 '오늘' 배지 노출
+            // 실제 기기의 오늘 날짜와 일치할 때만 파란색 '오늘' 배지 노출
             const badge = document.getElementById('today-badge');
-            if (dateStr === '2026-07-17') {
+            if (dateStr === getTodayStr()) {
                 badge.classList.remove('hidden');
             } else {
                 badge.classList.add('hidden');
@@ -478,7 +495,7 @@
                 memo: document.getElementById('memo-input').value.trim()
             };
 
-            localStorage.setItem('control_notes_data', JSON.stringify(records));
+            localStorage.setItem('control_notes_data_v2', JSON.stringify(records));
             showToast('✅ 조절노트가 안전하게 저장되었습니다.', 'success');
             
             loadExistingRecord(dateStr);
@@ -639,7 +656,7 @@
             if (!targetDeleteDate) return;
             loadRecords();
             delete records[targetDeleteDate];
-            localStorage.setItem('control_notes_data', JSON.stringify(records));
+            localStorage.setItem('control_notes_data_v2', JSON.stringify(records));
             showToast('🗑️ 해당 날짜의 기록이 삭제되었습니다.', 'info');
             
             const currentDate = document.getElementById('record-date').value;
@@ -673,134 +690,170 @@
             }
         }
 
-        // Chart.js 그래프 그리기
+        // Chart.js 그래프 그리기 (기록이 있는 첫 날짜부터, 월~일 1주일 단위로 카드 생성)
         function renderChart() {
             loadRecords();
-            
-            let chartLabels = [];
-            let urgeScores = [];
-            let actionScores = [];
-            let emotionScores = [];
+
+            const container = document.getElementById('trend-charts-container');
+            container.innerHTML = '';
 
             const sortedDates = Object.keys(records).sort((a, b) => new Date(a) - new Date(b));
 
+            // 기록이 하나도 없으면 빈 상태 안내만 표시
             if (sortedDates.length === 0) {
-                // 데이터가 완전히 없더라도 최근 7일(2026-07-17 기준)의 날짜 가로축은 온전하게 출력하도록 보완
-                const baseDate = new Date('2026-07-17');
-                for (let i = 6; i >= 0; i--) {
-                    const d = new Date(baseDate);
-                    d.setDate(baseDate.getDate() - i);
+                container.innerHTML = `
+                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm/50">
+                        <div class="text-center py-12 px-4 border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/30">
+                            <svg class="inline-block align-[-0.125em] text-3xl text-slate-300 mb-2.5 block" style="width:1em;height:1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 19V5"/><polyline points="4 15 9 10 13 13 20 6"/></svg>
+                            <p class="text-xs font-bold text-slate-400">아직 기록된 데이터가 없습니다.</p>
+                            <p class="text-[10px] text-slate-400 mt-1">기록을 저장하면 날짜별 변화가 여기에 표시됩니다.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // 최초 기록 날짜가 속한 주의 월요일 ~ 최근 기록 날짜가 속한 주의 월요일까지 주 단위로 순회
+            const firstMonday = getMonday(new Date(sortedDates[0]));
+            const lastMonday = getMonday(new Date(sortedDates[sortedDates.length - 1]));
+
+            const weekStarts = [];
+            let cursor = new Date(firstMonday);
+            while (cursor <= lastMonday) {
+                weekStarts.push(new Date(cursor));
+                cursor.setDate(cursor.getDate() + 7);
+            }
+
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+            // 오래된 주 -> 최근 주 순서로, 주가 바뀔 때마다 카드가 아래로 새로 생성됨
+            weekStarts.forEach((weekStart, weekIndex) => {
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+
+                const rangeLabel = `${formatDateStr(weekStart)} ~ ${formatDateStr(weekEnd)}`;
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-3xl border border-slate-100 shadow-sm/50";
+                card.innerHTML = `
+                    <div class="mb-4">
+                        <h3 class="text-base font-black text-slate-950 flex items-center gap-2">
+                            <svg class="inline-block align-[-0.125em] text-indigo-500" style="width:1em;height:1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 19V5"/><polyline points="4 15 9 10 13 13 20 6"/></svg>${rangeLabel}
+                        </h3>
+                        <p class="text-[11px] text-slate-400 font-medium mt-1">월요일부터 일요일까지 한 주간의 변화입니다.</p>
+                    </div>
+                    <div class="relative min-h-[260px] flex items-center justify-center">
+                        <canvas id="trendChart-${weekIndex}" class="w-full h-full max-h-[300px]"></canvas>
+                    </div>
+                `;
+                container.appendChild(card);
+
+                const chartLabels = [];
+                const urgeScores = [];
+                const actionScores = [];
+                const emotionScores = [];
+
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(weekStart);
+                    d.setDate(weekStart.getDate() + i);
+                    const dateStr = formatDateStr(d);
                     const mm = String(d.getMonth() + 1).padStart(2, '0');
                     const dd = String(d.getDate()).padStart(2, '0');
-                    chartLabels.push([`${mm}/${dd}`, '', '']);
-                    urgeScores.push(null);
-                    actionScores.push(null);
-                    emotionScores.push(null);
+
+                    chartLabels.push(`${mm}/${dd}(${dayNames[d.getDay()]})`);
+
+                    const item = records[dateStr];
+                    urgeScores.push(item ? item.urge : null);
+                    actionScores.push(item ? item.action : null);
+                    emotionScores.push(item ? item.emotion : null);
                 }
-            } else {
-                // 저장 데이터가 있을 때 최근 7일 필터링 및 대입
-                const last7Days = sortedDates.slice(-7);
-                chartLabels = last7Days.map(date => {
-                    const parts = date.split('-');
-                    const dateLabel = `${parts[1]}/${parts[2]}`; // "MM/DD" 포맷팅
-                    const item = records[date];
-                    const sideEffectsLine = item.sideEffects && item.sideEffects.length > 0 ? item.sideEffects.join(', ') : '';
-                    const memoLine = item.memo && item.memo.trim() ? item.memo : '';
-                    return [dateLabel, sideEffectsLine, memoLine];
-                });
-                urgeScores = last7Days.map(date => records[date].urge);
-                actionScores = last7Days.map(date => records[date].action);
-                emotionScores = last7Days.map(date => records[date].emotion);
-            }
 
-            const canvas = document.getElementById('trendChart');
-            
-            // Canvas is already in use 중복 에러 차단을 위해 기존 활성 객체 탐색 후 파괴
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) {
-                existingChart.destroy();
-            }
+                const canvas = document.getElementById(`trendChart-${weekIndex}`);
+                const ctx = canvas.getContext('2d');
 
-            const ctx = canvas.getContext('2d');
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: chartLabels,
-                    datasets: [
-                        {
-                            label: '충동 강도',
-                            data: urgeScores,
-                            borderColor: '#6366f1', // Indigo
-                            backgroundColor: 'rgba(99, 102, 241, 0.05)',
-                            tension: 0.35,
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#6366f1',
-                            fill: true
-                        },
-                        {
-                            label: '행동 여부',
-                            data: actionScores,
-                            borderColor: '#f43f5e', // Rose
-                            backgroundColor: 'rgba(244, 63, 94, 0.05)',
-                            tension: 0.35,
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#f43f5e',
-                            fill: true
-                        },
-                        {
-                            label: '감정 상태',
-                            data: emotionScores,
-                            borderColor: '#f59e0b', // Amber
-                            backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                            tension: 0.35,
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#f59e0b',
-                            fill: true
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    clip: false,
-                    layout: {
-                        padding: { top: 10, bottom: 10 }
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [
+                            {
+                                label: '충동 강도',
+                                data: urgeScores,
+                                borderColor: '#6366f1', // Indigo
+                                backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                                tension: 0.35,
+                                borderWidth: 3,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#6366f1',
+                                fill: true,
+                                spanGaps: false
+                            },
+                            {
+                                label: '행동 여부',
+                                data: actionScores,
+                                borderColor: '#f43f5e', // Rose
+                                backgroundColor: 'rgba(244, 63, 94, 0.05)',
+                                tension: 0.35,
+                                borderWidth: 3,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#f43f5e',
+                                fill: true,
+                                spanGaps: false
+                            },
+                            {
+                                label: '감정 상태',
+                                data: emotionScores,
+                                borderColor: '#f59e0b', // Amber
+                                backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                                tension: 0.35,
+                                borderWidth: 3,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#f59e0b',
+                                fill: true,
+                                spanGaps: false
+                            }
+                        ]
                     },
-                    scales: {
-                        y: {
-                            min: 0,
-                            max: 3,
-                            grid: { color: '#f1f5f9' },
-                            ticks: {
-                                stepSize: 1,
-                                font: { size: 10, weight: '700' },
-                                color: '#94a3b8'
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        clip: false,
+                        layout: {
+                            padding: { top: 10, bottom: 10 }
+                        },
+                        scales: {
+                            y: {
+                                min: 0,
+                                max: 3,
+                                grid: { color: '#f1f5f9' },
+                                ticks: {
+                                    stepSize: 1,
+                                    font: { size: 10, weight: '700' },
+                                    color: '#94a3b8'
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    font: { size: 10, weight: '700' },
+                                    color: '#94a3b8'
+                                }
                             }
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                font: { size: 10, weight: '700' },
-                                color: '#94a3b8'
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                boxWidth: 8,
-                                boxHeight: 8,
-                                padding: 16,
-                                font: { size: 11, weight: '700' },
-                                color: '#475569'
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 8,
+                                    boxHeight: 8,
+                                    padding: 16,
+                                    font: { size: 11, weight: '700' },
+                                    color: '#475569'
+                                }
                             }
                         }
                     }
-                }
+                });
             });
         }
     </script>
